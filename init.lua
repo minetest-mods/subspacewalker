@@ -27,7 +27,7 @@ subspacewalker.ssw_is_enabled = function(user)
 	if not user then -- if user leave the game, disable them
 		return false
 	end
-	
+
 	local item = user:get_wielded_item()
 	if not item or item:get_name() ~= "subspacewalker:walker" then
         return false
@@ -77,7 +77,7 @@ subspacewalker.hide_blocks = function(dtime)
 						subspacewalker.hide_node({x=x,y=y,z=z})
 					end
 				end
-			end								
+			end
 		end
 	end
 end
@@ -119,8 +119,8 @@ end
 -- tool definition
 minetest.register_tool("subspacewalker:walker", {
 	description = "Subspace Walker",
-	inventory_image = "default_torch_on_floor.png",
-	wield_image = "default_torch_on_floor.png",
+	inventory_image = "subspace_walker.png",
+	wield_image = "subspace_walker.png",
 	tool_capabilities = {},
 	range = 0,
 	on_use = subspacewalker.enable_ssw,
@@ -142,6 +142,8 @@ minetest.register_node("subspacewalker:subspace", {
         diggable = false,
         walkable = false,
         groups = {not_in_creative_inventory=1},
+        pointable = false,
+        drop = ""
 })
 
 
@@ -151,4 +153,14 @@ minetest.register_abm({
         interval = 0.1,
         chance = 1,
         action = subspacewalker.restore_blocks
+})
+
+minetest.register_craft({
+        output = "subspacewalker:walker",
+        width = 1,
+        recipe = {
+                {"default:diamond"},
+                {"default:mese_crystal"},
+                {"group:stick"}
+        }
 })
