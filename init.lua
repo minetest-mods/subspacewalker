@@ -1,29 +1,21 @@
 -- constant subspace size
 local c_subspacesize = 3
 
+
 -- Check if the subspace still enabled for user (or can be disabled)
-local function ssw_is_enabled(user)
-	if not user then -- if user leave the game, disable them
+local function ssw_is_enabled(name)
+	user = minetest.get_player_by_name(name)
+	-- if user leave the game, disable them
+	if not user then
 		return false
 	end
-
+	-- user does not hold the walker in the hand
 	local item = user:get_wielded_item()
 	if not item or item:get_name() ~= "subspacewalker:walker" then
 		return false
 	end
+	-- all ok, still active
 	return true
-end
-
--- Hide a node
-local function hide_node(pos)
-	local node = minetest.get_node(pos)
-	if node and node.name ~= "air" and node.name ~= "subspacewalker:subspace" and node.name ~= 'ignore' then
-		-- Save the node's original name
-		minetest.get_meta(pos):set_string("subspacewalker", node.name)
-		-- Swap in placeholder node
-		node.name = "subspacewalker:subspace"
-		minetest.swap_node(pos, node)
-	end
 end
 
 -- get y offset for sneaking or jumping
@@ -39,7 +31,7 @@ local function get_player_y_offset(user)
 	return y
 end
 
--- subspacewalker runtime object
+-- subspacewalker runtime data
 local subspacewalker = {
 	users_in_subspace = {},
 	timer = 0,
@@ -54,7 +46,7 @@ minetest.register_tool("subspacewalker:walker", {
 	tool_capabilities = {},
 	range = 0,
 	on_use = function(itemstack, user, pointed_thing)
-		subspacewalker.users_in_subspace[user:get_player_name()] = user
+		subspacewalker.users_in_subspace[user:get_player_name()] = true
 	end,
 	on_place = function(itemstack, user, pointed_thing)
 		subspacewalker.users_in_subspace[user:get_player_name()] = nil
@@ -71,16 +63,24 @@ minetest.register_globalstep(function(dtime)
 		return
 	end
 
-	for name, user in pairs(subspacewalker.users_in_subspace) do
-		if not ssw_is_enabled(user) then
-			subspacewalker.users_in_subspace[user:get_player_name()] = nil
+	for name,_ in pairs(subspacewalker.users_in_subspace) do
+		if not ssw_is_enabled(name) then
+			subspacewalker.users_in_subspace[name] = nil
 		else
 			local userpos = user:getpos()
 			local ydelta = get_player_y_offset(user)
 			for x=userpos.x-c_subspacesize, userpos.x+c_subspacesize do
 				for y=userpos.y+ydelta, userpos.y+c_subspacesize*2 do -- we need the ground under the user
 					for z=userpos.z-c_subspacesize, userpos.z+c_subspacesize do
-						hide_node({x=x,y=y,z=z})
+						local pos = {x=x,y=y,z=z}
+						local node = minetest.get_node(pos)
+						if node and node.name ~= "air" and node.name ~= "subspacewalker:subspace" and node.name ~= 'ignore' then
+							-- Save the node's original name
+							minetest.get_meta(pos):set_string("subspacewalker", node.name)
+							-- Swap in placeholder node
+							node.name = "subspacewalker:subspace"
+							minetest.swap_node(pos, node)
+						end
 					end
 				end
 			end
@@ -113,9 +113,9 @@ minetest.register_abm({
 
 		local can_be_restored = true
 		-- check if the node can be restored
-		for name, user in pairs(subspacewalker.users_in_subspace) do
-			if not ssw_is_enabled(user) then
-				subspacewalker.users_in_subspace[user:get_player_name()] = nil
+		for name, _ in pairs(subspacewalker.users_in_subspace) do
+			if not ssw_is_enabled(name) then
+				subspacewalker.users_in_subspace[name] = nil
 			else
 				local userpos = user:getpos()
 				local ydelta = get_player_y_offset(user)
