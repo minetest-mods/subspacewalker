@@ -1,9 +1,17 @@
 -- constant subspace size
 local c_subspacesize = 3
 
+-- transform compatible nodes only
+local c_restricted_mode = true
+
+local compatible_nodes = {
+	"default:stone",
+	"default:dirt"
+}
+
 -- Check if the subspace still enabled for user (or can be disabled)
 local function ssw_is_enabled(name)
-	user = minetest.get_player_by_name(name)
+	local user = minetest.get_player_by_name(name)
 	-- if user leave the game, disable them
 	if not user then
 		return false
@@ -68,6 +76,7 @@ minetest.register_globalstep(function(dtime)
 		if not ssw_is_enabled(name) then
 			subspacewalker.users_in_subspace[name] = nil
 		else
+			local user = minetest.get_player_by_name(name)
 			local userpos = user:getpos()
 			local ydelta = get_player_y_offset(user)
 			local pos1 = vector.round({x=userpos.x-c_subspacesize, y=userpos.y+ydelta, z=userpos.z-c_subspacesize})
@@ -79,16 +88,28 @@ minetest.register_globalstep(function(dtime)
 
 			local data = manip:get_data()
 			local changed = false
+
 			local ssw_id = minetest.get_content_id("subspacewalker:subspace")
 			local air_id = minetest.get_content_id("air")
+
 
 			for i in area:iterp(pos1, pos2) do
 				local cur_id = data[i]
 				if cur_id and cur_id ~= ssw_id and cur_id ~= air_id then
 					local cur_name = minetest.get_name_from_content_id(cur_id)
-					data[i] = ssw_id
-					minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
-					changed = true
+					if c_restricted_mode then
+						for _, compat in ipairs(compatible_nodes) do
+							if compat == cur_name then
+								data[i] = ssw_id
+								minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
+								changed = true
+							end
+						end
+					else
+						data[i] = ssw_id
+						minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
+						changed = true
+					end
 				end
 			end
 
@@ -130,12 +151,13 @@ minetest.register_abm({
 			if not ssw_is_enabled(name) then
 				subspacewalker.users_in_subspace[name] = nil
 			else
+				local user = minetest.get_player_by_name(name)
 				local userpos = user:getpos()
 				local ydelta = get_player_y_offset(user)
 				if ( pos.x >= userpos.x-c_subspacesize-1 and pos.x <= userpos.x+c_subspacesize+1) and  -- "+1" is to avoid flickering of nodes. restoring range is higher then the effect range
 						( pos.y >= userpos.y+ydelta and pos.y <= userpos.y+c_subspacesize*2+1 ) and
 						( pos.z >= userpos.z-c_subspacesize-1 and pos.z <= userpos.z+c_subspacesize+1) then
-					can_be_restored = false  --active user in range
+					can_be_restored = false --active user in range
 				end
 			end
 		end
@@ -146,9 +168,9 @@ minetest.register_abm({
 			local meta = minetest.get_meta(pos)
 			local data = meta:to_table()
 			node.name = data.fields.subspacewalker
-					data.fields.subspacewalker = nil
-					meta:from_table(data)
-					minetest.swap_node(pos, node)
+			data.fields.subspacewalker = nil
+			meta:from_table(data)
+			minetest.swap_node(pos, node)
 		end
 	end
 })
