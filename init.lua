@@ -1,7 +1,6 @@
 -- constant subspace size
 local c_subspacesize = 3
 
-
 -- Check if the subspace still enabled for user (or can be disabled)
 local function ssw_is_enabled(name)
 	user = minetest.get_player_by_name(name)
@@ -59,8 +58,10 @@ minetest.register_tool("subspacewalker:walker", {
 -- Globalstep check for nodes to hide
 minetest.register_globalstep(function(dtime)
 	subspacewalker.timer = subspacewalker.timer + dtime
-	if subspacewalker.timer < 0.25 then
+	if subspacewalker.timer <= 0.3 then
 		return
+	else
+		subspacewalker.timer = 0
 	end
 
 	for name,_ in pairs(subspacewalker.users_in_subspace) do
@@ -69,20 +70,32 @@ minetest.register_globalstep(function(dtime)
 		else
 			local userpos = user:getpos()
 			local ydelta = get_player_y_offset(user)
-			for x=userpos.x-c_subspacesize, userpos.x+c_subspacesize do
-				for y=userpos.y+ydelta, userpos.y+c_subspacesize*2 do -- we need the ground under the user
-					for z=userpos.z-c_subspacesize, userpos.z+c_subspacesize do
-						local pos = {x=x,y=y,z=z}
-						local node = minetest.get_node(pos)
-						if node and node.name ~= "air" and node.name ~= "subspacewalker:subspace" and node.name ~= 'ignore' then
-							-- Save the node's original name
-							minetest.get_meta(pos):set_string("subspacewalker", node.name)
-							-- Swap in placeholder node
-							node.name = "subspacewalker:subspace"
-							minetest.swap_node(pos, node)
-						end
-					end
+			local pos1 = vector.round({x=userpos.x-c_subspacesize, y=userpos.y+ydelta, z=userpos.z-c_subspacesize})
+			local pos2 = vector.round({x=userpos.x+c_subspacesize, y=userpos.y+c_subspacesize*2, z=userpos.z+c_subspacesize})
+
+			local manip = minetest.get_voxel_manip()
+			local min_c, max_c = manip:read_from_map(pos1, pos2)
+			local area = VoxelArea:new({MinEdge=min_c, MaxEdge=max_c})
+
+			local data = manip:get_data()
+			local changed = false
+			local ssw_id = minetest.get_content_id("subspacewalker:subspace")
+			local air_id = minetest.get_content_id("air")
+
+			for i in area:iterp(pos1, pos2) do
+				local cur_id = data[i]
+				if cur_id and cur_id ~= ssw_id and cur_id ~= air_id then
+					local cur_name = minetest.get_name_from_content_id(cur_id)
+					data[i] = ssw_id
+					minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
+					changed = true
 				end
+			end
+
+			if changed then
+				manip:set_data(data)
+				manip:write_to_map()
+				manip:update_map()
 			end
 		end
 	end
