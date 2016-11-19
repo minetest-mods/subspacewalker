@@ -13,8 +13,8 @@ local compatible_nodes = {
 }
 
 -- Check if the subspace still enabled for user (or can be disabled)
-local function ssw_is_enabled(name)
-	local user = minetest.get_player_by_name(name)
+local function ssw_is_enabled(playername)
+	local user = minetest.get_player_by_name(playername)
 	-- if user leave the game, disable them
 	if not user then
 		return false
@@ -54,20 +54,20 @@ minetest.register_tool("subspacewalker:walker", {
 -- Globalstep check for nodes to hide
 minetest.register_globalstep(function(dtime)
 	-- check each player with walker active
-	for name, ssb in pairs(subspacewalker.users_in_subspace) do
-		ssb.timer = ssb.timer + dtime
-		if not ssw_is_enabled(name) then
-			subspacewalker.users_in_subspace[name] = nil
+	for playername, ssw in pairs(subspacewalker.users_in_subspace) do
+		ssw.timer = ssw.timer + dtime
+		if not ssw_is_enabled(playername) then
+			subspacewalker.users_in_subspace[playername] = nil
 		else
-			local user = minetest.get_player_by_name(name)
+			local user = minetest.get_player_by_name(playername)
 			local control = user:get_player_control()
 			local userpos = user:getpos()
 
 			--regular step, once each second
-			if ssb.timer > 0.5 or
+			if ssw.timer > 0.5 or
 					--sneaking but not in air
 					(control.sneak and userpos.y - 0.5 == math.floor(userpos.y)) then
-				ssb.timer = 0
+				ssw.timer = 0
 
 				-- set offset for jump or sneak
 				userpos.y = math.floor(userpos.y+0.5)
@@ -166,11 +166,11 @@ minetest.register_abm({
 
 		local can_be_restored = true
 		-- check if the node can be restored
-		for name, _ in pairs(subspacewalker.users_in_subspace) do
-			if not ssw_is_enabled(name) then
-				subspacewalker.users_in_subspace[name] = nil
+		for playername, _ in pairs(subspacewalker.users_in_subspace) do
+			if not ssw_is_enabled(playername) then
+				subspacewalker.users_in_subspace[playername] = nil
 			else
-				local user = minetest.get_player_by_name(name)
+				local user = minetest.get_player_by_name(playername)
 				local userpos = user:getpos()
 				userpos.y = math.floor(userpos.y+0.5)
 				if ( pos.x >= userpos.x-c_subspacesize-1 and pos.x <= userpos.x+c_subspacesize+1) and  -- "+1" is to avoid flickering of nodes. restoring range is higher then the effect range
