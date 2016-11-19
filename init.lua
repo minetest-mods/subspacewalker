@@ -31,7 +31,6 @@ end
 -- subspacewalker runtime data
 local subspacewalker = {
 	users_in_subspace = {},
-	timer = 0,
 }
 
 -- tool definition
@@ -42,7 +41,7 @@ minetest.register_tool("subspacewalker:walker", {
 	tool_capabilities = {},
 	range = 0,
 	on_use = function(itemstack, user, pointed_thing)
-		subspacewalker.users_in_subspace[user:get_player_name()] = true
+		subspacewalker.users_in_subspace[user:get_player_name()] = {timer = 1}
 	end,
 	on_place = function(itemstack, user, pointed_thing)
 		subspacewalker.users_in_subspace[user:get_player_name()] = nil
@@ -54,10 +53,9 @@ minetest.register_tool("subspacewalker:walker", {
 
 -- Globalstep check for nodes to hide
 minetest.register_globalstep(function(dtime)
-	subspacewalker.timer = subspacewalker.timer + dtime
-
 	-- check each player with walker active
-	for name,_ in pairs(subspacewalker.users_in_subspace) do
+	for name, ssb in pairs(subspacewalker.users_in_subspace) do
+		ssb.timer = ssb.timer + dtime
 		if not ssw_is_enabled(name) then
 			subspacewalker.users_in_subspace[name] = nil
 		else
@@ -66,10 +64,10 @@ minetest.register_globalstep(function(dtime)
 			local userpos = user:getpos()
 
 			--regular step, once each second
-			if subspacewalker.timer > 0.5 or
+			if ssb.timer > 0.5 or
 					--sneaking but not in air
 					(control.sneak and userpos.y - 0.5 == math.floor(userpos.y)) then
-				subspacewalker.timer = 0
+				ssb.timer = 0
 
 				-- set offset for jump or sneak
 				userpos.y = math.floor(userpos.y+0.5)
