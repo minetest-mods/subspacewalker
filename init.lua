@@ -1,5 +1,8 @@
 -- constant subspace size
-local c_subspacesize = 3
+local c_subspacesize = 8
+
+-- chance for node restoral per second (No worries, all nodes will be restored, but not immediately)
+local c_randomize_restore = 5
 
 -- transform compatible nodes only
 local c_restricted_mode = true
@@ -25,26 +28,12 @@ local function ssw_is_enabled(name)
 	return true
 end
 
--- get y offset for sneaking or jumping
-local function get_player_y_offset(user)
-	local control = user:get_player_control()
-	local y = 0.5
-	if control.jump then
-		y = y + 1
-	end
-	if control.sneak then
-		y = y - 1
-	end
-	return y
-end
-
 -- subspacewalker runtime data
 local subspacewalker = {
 	users_in_subspace = {},
 	timer = 0,
 }
 
-------------- Minetest registrations -----------------------
 -- tool definition
 minetest.register_tool("subspacewalker:walker", {
 	description = "Subspace Walker",
@@ -66,57 +55,89 @@ minetest.register_tool("subspacewalker:walker", {
 -- Globalstep check for nodes to hide
 minetest.register_globalstep(function(dtime)
 	subspacewalker.timer = subspacewalker.timer + dtime
-	if subspacewalker.timer <= 0.3 then
-		return
-	else
-		subspacewalker.timer = 0
-	end
 
+	-- check each player with walker active
 	for name,_ in pairs(subspacewalker.users_in_subspace) do
 		if not ssw_is_enabled(name) then
 			subspacewalker.users_in_subspace[name] = nil
 		else
 			local user = minetest.get_player_by_name(name)
+			local control = user:get_player_control()
 			local userpos = user:getpos()
-			local ydelta = get_player_y_offset(user)
-			local pos1 = vector.round({x=userpos.x-c_subspacesize, y=userpos.y+ydelta, z=userpos.z-c_subspacesize})
-			local pos2 = vector.round({x=userpos.x+c_subspacesize, y=userpos.y+c_subspacesize*2, z=userpos.z+c_subspacesize})
 
-			local manip = minetest.get_voxel_manip()
-			local min_c, max_c = manip:read_from_map(pos1, pos2)
-			local area = VoxelArea:new({MinEdge=min_c, MaxEdge=max_c})
+			--regular step, once each second
+			if subspacewalker.timer > 0.5 or
+					--sneaking but not in air
+					(control.sneak and userpos.y - 0.5 == math.floor(userpos.y)) then
+				subspacewalker.timer = 0
 
-			local data = manip:get_data()
-			local changed = false
+				-- set offset for jump or sneak
+				userpos.y = math.floor(userpos.y+0.5)
+				if control.jump then
+					userpos.y = userpos.y + 1
+				elseif control.sneak then
+					userpos.y = userpos.y -1
+				end
+				userpos = vector.round(userpos)
 
-			local ssw_id = minetest.get_content_id("subspacewalker:subspace")
-			local air_id = minetest.get_content_id("air")
+				--voxel_manip magic
+				local pos1 = {x=userpos.x-c_subspacesize, y=userpos.y, z=userpos.z-c_subspacesize}
+				local pos2 = {x=userpos.x+c_subspacesize, y=userpos.y+c_subspacesize, z=userpos.z+c_subspacesize}
 
+				local manip = minetest.get_voxel_manip()
+				local min_c, max_c = manip:read_from_map(pos1, pos2)
+				local area = VoxelArea:new({MinEdge=min_c, MaxEdge=max_c})
 
-			for i in area:iterp(pos1, pos2) do
-				local cur_id = data[i]
-				if cur_id and cur_id ~= ssw_id and cur_id ~= air_id then
-					local cur_name = minetest.get_name_from_content_id(cur_id)
-					if c_restricted_mode then
-						for _, compat in ipairs(compatible_nodes) do
-							if compat == cur_name then
+				local data = manip:get_data()
+				local changed = false
+
+				local ssw_id = minetest.get_content_id("subspacewalker:subspace")
+				local air_id = minetest.get_content_id("air")
+
+				-- check each node in the area
+				for i in area:iterp(pos1, pos2) do
+					local nodepos = area:position(i)
+--					if math.random(0, vector.distance(userpos, nodepos)) < 2 then
+						local cur_id = data[i]
+						if cur_id and cur_id ~= ssw_id and cur_id ~= air_id then
+							local cur_name = minetest.get_name_from_content_id(cur_id)
+							if c_restricted_mode then
+								for _, compat in ipairs(compatible_nodes) do
+									if compat == cur_name then
+										data[i] = ssw_id
+										minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
+										changed = true
+									end
+								end
+							else
 								data[i] = ssw_id
 								minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
 								changed = true
 							end
 						end
-					else
-						data[i] = ssw_id
-						minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
-						changed = true
-					end
+--					end
+				end
+				-- save changes if needed
+				if changed then
+					manip:set_data(data)
+					manip:write_to_map()
+					manip:update_map()
 				end
 			end
 
-			if changed then
-				manip:set_data(data)
-				manip:write_to_map()
-				manip:update_map()
+			-- jump special handling. Restore node under the player
+			if control.jump then
+				local userpos = user:getpos()
+				userpos.y = math.floor(userpos.y-0.5)
+				local node = minetest.get_node(userpos)
+				local meta = minetest.get_meta(userpos)
+				local data = meta:to_table()
+				if data.fields.subspacewalker then
+					node.name = data.fields.subspacewalker
+					data.fields.subspacewalker = nil
+					meta:from_table(data)
+					minetest.swap_node(userpos, node)
+				end
 			end
 		end
 	end
@@ -138,8 +159,8 @@ minetest.register_node("subspacewalker:subspace", {
 -- ABM on hidden blocks checks if there can be restored again
 minetest.register_abm({
 	nodenames = { "subspacewalker:subspace" },
-	interval = 0.1,
-	chance = 1,
+	interval = 0.5,
+	chance = c_randomize_restore,
 	action = function(pos, node)
 		if node.name == 'ignore' then 
 			return 
@@ -153,9 +174,9 @@ minetest.register_abm({
 			else
 				local user = minetest.get_player_by_name(name)
 				local userpos = user:getpos()
-				local ydelta = get_player_y_offset(user)
+				userpos.y = math.floor(userpos.y+0.5)
 				if ( pos.x >= userpos.x-c_subspacesize-1 and pos.x <= userpos.x+c_subspacesize+1) and  -- "+1" is to avoid flickering of nodes. restoring range is higher then the effect range
-						( pos.y >= userpos.y+ydelta and pos.y <= userpos.y+c_subspacesize*2+1 ) and
+						( pos.y >= userpos.y and pos.y <= userpos.y+c_subspacesize+1 ) and
 						( pos.z >= userpos.z-c_subspacesize-1 and pos.z <= userpos.z+c_subspacesize+1) then
 					can_be_restored = false --active user in range
 				end
