@@ -64,7 +64,7 @@ minetest.register_globalstep(function(dtime)
 			local userpos = user:getpos()
 
 			--regular step, once each second
-			if ssw.timer > 0.5 or
+			if ssw.timer > 0.2 or --0.5
 					--sneaking but not in air
 					(control.sneak and userpos.y - 0.5 == math.floor(userpos.y)) then
 				ssw.timer = 0
@@ -119,7 +119,6 @@ minetest.register_globalstep(function(dtime)
 				if changed then
 					manip:set_data(data)
 					manip:write_to_map()
-					manip:update_map()
 				end
 			end
 
