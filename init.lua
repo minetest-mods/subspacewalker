@@ -13,7 +13,7 @@ local compatible_nodes = {
 }
 
 -- Check if the subspace still enabled for user (or can be disabled)
-local function ssw_is_enabled(playername)
+local function ssw_get_wielded(playername)
 	local user = minetest.get_player_by_name(playername)
 	-- if user leave the game, disable them
 	if not user then
@@ -25,7 +25,7 @@ local function ssw_is_enabled(playername)
 		return false
 	end
 	-- all ok, still active
-	return true
+	return item
 end
 
 -- subspacewalker runtime data
@@ -56,7 +56,8 @@ minetest.register_globalstep(function(dtime)
 	-- check each player with walker active
 	for playername, ssw in pairs(subspacewalker.users_in_subspace) do
 		ssw.timer = ssw.timer + dtime
-		if not ssw_is_enabled(playername) then
+		local ssw_stack = ssw_get_wielded(playername)
+		if not ssw_stack then
 			subspacewalker.users_in_subspace[playername] = nil
 		else
 			local user = minetest.get_player_by_name(playername)
@@ -92,6 +93,8 @@ minetest.register_globalstep(function(dtime)
 				local ssw_id = minetest.get_content_id("subspacewalker:subspace")
 				local air_id = minetest.get_content_id("air")
 
+				local transform_count = 0
+
 				-- check each node in the area
 				for i in area:iterp(pos1, pos2) do
 					local nodepos = area:position(i)
@@ -105,12 +108,14 @@ minetest.register_globalstep(function(dtime)
 										data[i] = ssw_id
 										minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
 										changed = true
+										transform_count = transform_count + 1
 									end
 								end
 							else
 								data[i] = ssw_id
 								minetest.get_meta(area:position(i)):set_string("subspacewalker", cur_name)
 								changed = true
+								transform_count = transform_count + 1
 							end
 						end
 --					end
@@ -119,6 +124,9 @@ minetest.register_globalstep(function(dtime)
 				if changed then
 					manip:set_data(data)
 					manip:write_to_map()
+					local wear = ssw_stack:get_wear()
+					ssw_stack:add_wear(transform_count)
+					user:set_wielded_item(ssw_stack)
 				end
 			end
 
@@ -166,7 +174,8 @@ minetest.register_abm({
 		local can_be_restored = true
 		-- check if the node can be restored
 		for playername, _ in pairs(subspacewalker.users_in_subspace) do
-			if not ssw_is_enabled(playername) then
+			local ssw_stack = ssw_get_wielded(playername)
+			if not ssw_stack then
 				subspacewalker.users_in_subspace[playername] = nil
 			else
 				local user = minetest.get_player_by_name(playername)
