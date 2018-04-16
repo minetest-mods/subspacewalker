@@ -9,6 +9,8 @@ How to use:
 - Jumping bring the nodes below you back to outside Subspace so you can go upwards
 - To disable the Subspace Walker Tool just try to place it (left click) or take something other in the hand
 
+![Alt text](https://github.com/bell07/minetest-subspacewalker/raw/master/screenshot.png)
+
 The tool can be crafted in as a vertical stick:
 ```
 default:diamond
